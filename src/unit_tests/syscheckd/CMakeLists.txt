@@ -102,10 +102,7 @@ add_subdirectory(whodata)
 list(APPEND syscheckd_tests_names "test_syscom")
 list(APPEND syscheckd_tests_flags "-Wl,--wrap,getSyscheckConfig -Wl,--wrap,getRootcheckConfig \
                                    -Wl,--wrap,getSyscheckInternalOptions -Wl,--wrap,fim_sync_push_msg \
-                                   -Wl,--wrap,getpid -Wl,--wrap,fim_sync_push_msg -Wl,--wrap,fim_run_integrity -Wl,--wrap,fim_db_remove_path \
-                                   -Wl,--wrap,fim_db_get_path -Wl,--wrap,fim_db_transaction_start -Wl,--wrap,fim_db_transaction_deleted_rows \
-                                   -Wl,--wrap,fim_db_transaction_sync_row -Wl,--wrap,fim_db_file_update -Wl,--wrap,fim_db_file_pattern_search \
-                                   -Wl,--wrap,fim_db_init ${DEBUG_OP_WRAPPERS}")
+                                   -Wl,--wrap,getpid ${DEBUG_OP_WRAPPERS}")
 
 # create_db.c tests
 add_executable(test_create_db test_create_db.c)
