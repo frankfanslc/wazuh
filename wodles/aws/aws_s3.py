@@ -318,6 +318,12 @@ class WazuhIntegration:
             else:
                 print("ERROR: Error sending message to wazuh: {}".format(e))
                 sys.exit(13)
+
+        except json.JSONDecodeError as e:
+            print(f"ERROR: The message couldn't be decoded: {e}")
+            if not self.skip_on_error:
+                sys.exit(9)
+
         except Exception as e:
             print("ERROR: Error sending message to wazuh: {}".format(e))
             sys.exit(13)
@@ -840,7 +846,9 @@ class AWSBucket(WazuhIntegration):
             zipfile_object = zipfile.ZipFile(raw_object, compression=zipfile.ZIP_DEFLATED)
             return io.TextIOWrapper(zipfile_object.open(zipfile_object.namelist()[0]))
         elif log_key[-7:] == '.snappy':
-            raise TypeError("Snappy compression is not supported yet.")
+            print(f"ERROR: couldn't decompress the {log_key} file, snappy compression is not supported.")
+            if not self.skip_on_error:
+                raise NotImplementedError()
         else:
             return io.TextIOWrapper(raw_object)
 
@@ -992,8 +1000,6 @@ class AWSBucket(WazuhIntegration):
                 else:
                     break
 
-        except SystemExit:
-            raise
         except Exception as err:
             if hasattr(err, 'message'):
                 debug(f"+++ Unexpected error: {err.message}", 2)
@@ -1394,8 +1400,7 @@ class AWSConfigBucket(AWSLogsBucket):
                 # Optimize DB
                 self.db_maintenance(aws_account_id=aws_account_id, aws_region=aws_region)
                 self.db_connector.commit()
-        except SystemExit:
-            raise
+
         except Exception as err:
             if hasattr(err, 'message'):
                 debug("+++ Unexpected error: {}".format(err.message), 2)
@@ -1881,8 +1886,7 @@ class AWSVPCFlowBucket(AWSLogsBucket):
                 self.db_maintenance(aws_account_id=aws_account_id, aws_region=aws_region,
                                     flow_log_id=flow_log_id)
                 self.db_connector.commit()
-        except SystemExit:
-            raise
+
         except Exception as err:
             if hasattr(err, 'message'):
                 debug("+++ Unexpected error: {}".format(err.message), 2)
@@ -2298,11 +2302,15 @@ class AWSWAFBucket(AWSCustomBucket):
                                     headers[name] = element["value"]
                             event['httpRequest']['headers'] = headers
                         except (KeyError, TypeError):
-                            pass
+                            print(f"ERROR: the {log_key} file doesn't have the expected structure.")
+                            if not self.skip_on_error:
+                                sys.exit(9)
                         content.append(event)
+
                 except json.JSONDecodeError:
                     print("ERROR: Events from {} file could not be loaded.".format(log_key.split('/')[-1]))
-                    sys.exit(9)
+                    if not self.skip_on_error:
+                        sys.exit(9)
 
         return json.loads(json.dumps(content))
 
@@ -2508,8 +2516,6 @@ class AWSServerAccess(AWSCustomBucket):
                 else:
                     break
 
-        except SystemExit:
-            raise
         except Exception as err:
             if hasattr(err, 'message'):
                 debug(f"+++ Unexpected error: {err.message}", 2)
