@@ -1196,7 +1196,7 @@ async def test_master_handler_sync_integrity_ok(decompress_files_mock, compare_f
                      call('Finished in 0.000s. Received metadata of 14 files. Sync required.'),
                      call('Starting.'),
                      call('Files to create in worker: 1 | Files to update in worker: 1 | Files to delete in worker: '
-                          '1 | Files to receive: 0'), call('Finished in 0.000s.')])
+                          '1'), call('Finished in 0.000s.')])
                 debug_mock.assert_has_calls(
                     [call("Waiting to receive zip file from worker."), call("Received file from worker: 'filename'"),
                      call("Compressing files to be synced in worker."),
@@ -1234,7 +1234,7 @@ async def test_master_handler_sync_integrity_ok(decompress_files_mock, compare_f
                              call("Finished in 0.000s. Received metadata of 14 files. Sync required."),
                              call("Starting."), call(
                                 "Files to create in worker: 1 | Files to update in worker: 1 | Files to delete in "
-                                "worker: 1 | Files to receive: 1")])
+                                "worker: 1")])
                         debug_mock.assert_has_calls(
                             [call("Waiting to receive zip file from worker."),
                              call("Received file from worker: 'filename'"),
@@ -1273,7 +1273,7 @@ async def test_master_handler_sync_integrity_ok(decompress_files_mock, compare_f
                              call("Finished in 0.000s. Received metadata of 14 files. Sync required."),
                              call("Starting."), call(
                                 "Files to create in worker: 1 | Files to update in worker: 1 | Files to delete in "
-                                "worker: 1 | Files to receive: 1")])
+                                "worker: 1")])
                         debug_mock.assert_has_calls(
                             [call("Waiting to receive zip file from worker."),
                              call("Received file from worker: 'filename'"),
@@ -1308,7 +1308,7 @@ async def test_master_handler_sync_integrity_ok(decompress_files_mock, compare_f
                              call("Finished in 0.000s. Received metadata of 14 files. Sync required."),
                              call("Starting."), call(
                                 "Files to create in worker: 1 | Files to update in worker: 1 | Files to delete in "
-                                "worker: 1 | Files to receive: 1")])
+                                "worker: 1")])
                         debug_mock.assert_has_calls(
                             [call("Waiting to receive zip file from worker."),
                              call("Received file from worker: 'filename'"),
@@ -1344,7 +1344,7 @@ async def test_master_handler_sync_integrity_ok(decompress_files_mock, compare_f
                              call("Finished in 0.000s. Received metadata of 14 files. Sync required."),
                              call("Starting."), call(
                                 "Files to create in worker: 1 | Files to update in worker: 1 | Files to delete in "
-                                "worker: 1 | Files to receive: 1")])
+                                "worker: 1")])
                         debug_mock.assert_has_calls(
                             [call("Waiting to receive zip file from worker."),
                              call("Received file from worker: 'filename'"),
@@ -1722,38 +1722,32 @@ async def test_master_file_status_update_ok(run_in_pool_mock, sleep_mock):
         def clear(self):
             self._clear = True
 
-    async def final_function():
-        """Auxiliary method."""
-
-        await master_class.file_status_update()
-
-    def middle_function():
-        """Auxiliary method."""
-
-        _loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_loop)
-
-        _loop.run_until_complete(final_function())
-        _loop.close()
+    async def asyncio_sleep_mock(delay, result=None, *, loop=None):
+        assert delay == master_class.cluster_items['intervals']['worker']['sync_agent_info']
+        raise Exception()
 
     logger_mock = LoggerMock()
     master_class.integrity_already_executed = IntegrityExecutedMock()
 
     with patch("wazuh.core.cluster.master.Master.setup_task_logger",
                return_value=logger_mock) as setup_task_logger_mock:
-        _thread = threading.Thread(target=middle_function)
-        _thread.daemon = True
-        _thread.start()
-        time.sleep(5)
+        with patch('asyncio.sleep', asyncio_sleep_mock):
+            try:
+                await master_class.file_status_update()
+            except Exception:
+                pass
 
-        run_in_pool_mock.side_effect = Exception
-        time.sleep(5)
+            run_in_pool_mock.side_effect = Exception
+            try:
+                await master_class.file_status_update()
+            except Exception:
+                pass
 
-        assert "Starting." in logger_mock._info
-        assert "Finished in 0.000s. Calculated metadata of 0 files." in logger_mock._info
-        assert "Error calculating local file integrity: " in logger_mock._error
-        setup_task_logger_mock.assert_called_once_with('Local integrity')
-        assert master_class.integrity_control == run_in_pool_mock.return_value
+            assert "Starting." in logger_mock._info
+            assert "Finished in 0.000s. Calculated metadata of 0 files." in logger_mock._info
+            assert "Error calculating local file integrity: " in logger_mock._error
+            setup_task_logger_mock.assert_has_calls([call('Local integrity'), call('Local integrity')])
+            assert master_class.integrity_control == run_in_pool_mock.return_value
 
 
 @patch('asyncio.get_running_loop', return_value=loop)
