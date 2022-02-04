@@ -5,15 +5,17 @@
 
 import logging
 import os
-import sys
 from unittest.mock import patch, MagicMock, call
 
 import pytest
-from werkzeug.exceptions import Unauthorized
 
 with patch('wazuh.core.common.wazuh_uid'):
     with patch('wazuh.core.common.wazuh_gid'):
         from api import alogging
+
+REQUEST_HEADERS_TEST = {'authorization': 'Basic d2F6dWg6cGFzc3dvcmQxMjM='}  # wazuh:password123
+AUTH_CONTEXT_TEST = {'auth_context': 'example'}
+HASH_AUTH_CONTEXT_TEST = '020efd3b53c1baf338cf143fad7131c3'
 
 
 @pytest.mark.parametrize('side_effect, user', [
@@ -23,7 +25,7 @@ with patch('wazuh.core.common.wazuh_uid'):
 ])
 @patch('api.alogging.json.dumps')
 def test_accesslogger_log(mock_dumps, side_effect, user):
-    """Test expected methods are called when using log().
+    """Test expected methods are called when using log(). Also test that the user is logged properly.
 
     Parameters
     ----------
@@ -35,8 +37,7 @@ def test_accesslogger_log(mock_dumps, side_effect, user):
 
     # Create a class with a mocked get method for request
     class MockedRequest(MagicMock):
-        # wazuh:password123
-        headers = {'authorization': 'Basic d2F6dWg6cGFzc3dvcmQxMjM='} if side_effect is None else {}
+        headers = REQUEST_HEADERS_TEST if side_effect is None else {}
 
         def get(self, *args, **kwargs):
             return user
@@ -48,15 +49,73 @@ def test_accesslogger_log(mock_dumps, side_effect, user):
         test_access_logger = alogging.AccessLogger(logger=logging.getLogger('test'), log_format=MagicMock())
         test_access_logger.log(request=MockedRequest(), response=MagicMock(), time=0.0)
 
+        log_message = mock_logger_info.call_args.args[0].split(" ")
+
         # If not user, decode_token must be called to get the user and logger.info must be called with the user
         # if we have token_info or UNKNOWN_USER if not
         if not user:
             expected_user = 'wazuh' if side_effect is None else alogging.UNKNOWN_USER_STRING
-            assert mock_logger_info.call_args.args[0].split(" ")[0] == expected_user
+            assert log_message[0] == expected_user
 
         # If user, logger.info must be called with the user
         else:
-            assert mock_logger_info.call_args.args[0].split(" ")[0] == user
+            assert log_message[0] == user
+
+
+@pytest.mark.parametrize('request_path, token_info, request_body', [
+    ('/agents', {'hash_auth_context': HASH_AUTH_CONTEXT_TEST}, {}),  # Test a normal request logs the auth context hash
+    ('/security/user/authenticate/run_as', {'other_key': 'other_value'},
+     AUTH_CONTEXT_TEST),  # Test a login request generates and logs the auth context hash
+    ('/security/user/authenticate', None, {})  # Test any other call without auth context does not log the hash
+])
+def test_accesslogger_log_hash_auth_context(request_path, token_info, request_body):
+    """Test expected methods are called when using log(). Also test that the auth context hash is logged properly.
+
+    Parameters
+    ----------
+    request_path : str
+        Path used in the custom request.
+    token_info : dict
+        Dictionary corresponding to the token information. If token_info is None, we simulate that no token was given.
+    request_body : dict
+        Request body used in the custom request.
+    """
+
+    # Create a class with custom methods for request
+    class CustomRequest:
+        def __init__(self):
+            self.request_dict = {'token_info': token_info} if token_info else {}
+            self.path = request_path
+            self.body = request_body
+            self.query = {'q': 'test'}
+            self.remote = 'test'
+            self.method = 'test'
+            self.user = 'test'
+
+        def __contains__(self, key):
+            return key in self.request_dict
+
+        def __getitem__(self, key):
+            return self.request_dict[key]
+
+        def get(self, *args, **kwargs):
+            return getattr(self, args[0]) if args[0] in self.__dict__.keys() else args[1]
+
+    # Mock logger.info
+    with patch('logging.Logger.info') as mock_logger_info:
+        # Create an AccessLogger object and log a mocked call
+        request = CustomRequest()
+        test_access_logger = alogging.AccessLogger(logger=logging.getLogger('test'), log_format=MagicMock())
+        test_access_logger.log(request=request, response=MagicMock(), time=0.0)
+
+        log_message = mock_logger_info.call_args.args[0].split(" ")
+
+        # Test authorization context hash is being logged
+        if (token_info and token_info.get('hash_auth_context')) or \
+                (request_path == "/security/user/authenticate/run_as" and request_body):
+            assert log_message[1] == HASH_AUTH_CONTEXT_TEST
+        else:
+            assert log_message[1] == request.remote
 
 
 @patch('wazuh.core.wlogging.WazuhLogger.__init__')
