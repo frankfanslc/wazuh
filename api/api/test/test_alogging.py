@@ -24,8 +24,8 @@ HASH_AUTH_CONTEXT_TEST = '020efd3b53c1baf338cf143fad7131c3'
     (None, 'wazuh')
 ])
 @patch('api.alogging.json.dumps')
-def test_accesslogger_log(mock_dumps, side_effect, user):
-    """Test expected methods are called when using log(). Also test that the user is logged properly.
+def test_accesslogger_log_user(mock_dumps, side_effect, user):
+    """Test that the user is logged properly when using log().
 
     Parameters
     ----------
@@ -69,7 +69,7 @@ def test_accesslogger_log(mock_dumps, side_effect, user):
     ('/security/user/authenticate', None, {})  # Test any other call without auth context does not log the hash
 ])
 def test_accesslogger_log_hash_auth_context(request_path, token_info, request_body):
-    """Test expected methods are called when using log(). Also test that the auth context hash is logged properly.
+    """Test that the authorization context hash is logged properly when using log().
 
     Parameters
     ----------
