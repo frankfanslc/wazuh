@@ -1,12 +1,16 @@
 # Generate syscheck library
-file(GLOB sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*.o ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*/*.o)
-list(REMOVE_ITEM sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/main.c.o)
+if(${TARGET} STREQUAL "winagent")
+  file(GLOB sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*.obj ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*/*.obj)
+  list(REMOVE_ITEM sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/main.c.obj)
+else()
+  file(GLOB sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*.o ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/*/*.o)
+  list(REMOVE_ITEM sysfiles ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd.dir/src/main.c.o)
+endif()
 
 file(GLOB rootfiles ${SRC_FOLDER}/rootcheck/*.o)
 
 if(${TARGET} STREQUAL "winagent")
   # Exclude winagent files
-  list(FILTER sysfiles EXCLUDE REGEX ".*-event.o$")
   list(FILTER rootfiles EXCLUDE REGEX ".*_rk.o$")
 
   # Add test wrappers
@@ -73,7 +77,7 @@ include(${SRC_FOLDER}/unit_tests/wrappers/wazuh/shared/shared.cmake)
 
 # Generate syscheckd-event library
 if(${TARGET} STREQUAL "winagent")
-  file(GLOB syscheck_event_files ${SRC_FOLDER}/syscheckd/*-event.o ${SRC_FOLDER}/syscheckd/*/*-event.o)
+  file(GLOB syscheck_event_files ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd-event.dir/src/*.obj ${SRC_FOLDER}/syscheckd/build/CMakeFiles/wazuh-syscheckd-event.dir/src/*/*.obj)
 
   add_library(SYSCHECK_EVENT_O STATIC ${syscheck_event_files})
 
